@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>ТЕМ - Калькулятор (Оптимізований)</title>
+    <title>ТЕМ - Калькулятор (Оптимізований Supabase)</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; display: flex; padding: 20px; gap: 20px; margin: 0; min-height: 100vh; }
         .side-panel { width: 320px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); height: fit-content; }
@@ -42,9 +42,7 @@
 
         .btn-row-action { background: none; border: none; cursor: pointer; font-size: 13px; padding: 2px 4px; }
         .btn-row-copy { color: #2980b9; }
-        .btn-row-copy:hover { color: #1a5276; }
         .btn-row-del { color: #e74c3c; font-weight: bold; }
-        .btn-row-del:hover { color: #922b21; }
 
         #trailer_input_container { 
             margin-top: 10px; 
@@ -59,6 +57,11 @@
         .calc-archive-list { list-style: none; padding: 0; margin: 10px 0 0 0; }
         .calc-archive-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
     </style>
+
+    <!-- 1. Завантаження бібліотеки Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Файл конфігурації Supabase -->
+    <script src="supabase-config.js"></script>
 </head>
 <body onfocus="syncData()">
 
@@ -85,7 +88,7 @@
         </div>
     </div>
     
-    <button class="btn btn-orange" style="margin-top:20px;" onclick="window.open('map.html','_blank')">🗺️ КАРТА МАРШРУТУ</button>
+    <button class="btn btn-orange" style="margin-top:20px;" onclick="window.open('map.html','_blank')">🗺️ КАРТА МАРШ МАРШРУТУ</button>
     <button class="btn btn-purple" style="margin-top:10px;" onclick="location.href='book.html'">📖 КНИГА ОБЛІКУ</button>
     <button class="btn btn-blue" style="margin-top:10px; background:#8e44ad;" onclick="location.href='home.html'">🏠 НА ГОЛОВНУ</button>
 </div>
@@ -159,29 +162,18 @@
         return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
     }
 
-    try {
-        const channel = new BroadcastChannel('tem_route_channel');
-        channel.onmessage = function(event) {
-            if (event.data && event.data.action === 'load_route') {
-                importFromMap(event.data.data);
-            }
-        };
-    } catch(e) {
-        console.log("BroadcastChannel не підтримується", e);
-    }
-
-    window.onload = function() {
-        syncData();
-        renderCalcArchives();
+    window.onload = async function() {
+        await syncData();
+        await renderCalcArchives();
     };
 
-    window.addEventListener('storage', () => {
-        syncData();
+    window.addEventListener('storage', async () => {
+        await syncData();
         calculate();
     });
 
-    function syncData() {
-        updateCarList();
+    async function syncData() {
+        await updateCarList();
         displayActiveCoeffs();
         
         const mapData = JSON.parse(localStorage.getItem('map_to_calc_detailed'));
@@ -191,12 +183,9 @@
         }
     }
 
-    function updateCarList() {
+    // Завантаження списку авто користувача з Supabase або LocalStorage
+    async function updateCarList() {
         const select = document.getElementById('carSelect');
-        const cars = JSON.parse(localStorage.getItem('cars')) || {};
-        let recentCarIds = JSON.parse(localStorage.getItem('recent_car_ids')) || [];
-        const currentSelectedId = localStorage.getItem('selected_car_id');
-
         select.innerHTML = '';
 
         const defaultOpt = document.createElement('option');
@@ -206,24 +195,28 @@
         defaultOpt.hidden = true;
         select.appendChild(defaultOpt);
 
-        let validRecentIds = recentCarIds.filter(id => id && cars[id] && cars[id].name);
+        let cars = {};
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (validRecentIds.length === 0) {
-            for (let k in cars) {
-                if (cars[k] && cars[k].name) {
-                    validRecentIds.push(k);
-                    if (validRecentIds.length === 5) break;
-                }
+        if (user) {
+            // Зчитати авто з бази Supabase
+            const { data, error } = await supabase.from('cars').select('*');
+            if (!error && data) {
+                data.forEach(c => {
+                    cars[c.id] = c;
+                });
+                localStorage.setItem('cars', JSON.stringify(cars));
             }
-            localStorage.setItem('recent_car_ids', JSON.stringify(validRecentIds));
+        } else {
+            cars = JSON.parse(localStorage.getItem('cars')) || {};
         }
 
-        validRecentIds = validRecentIds.slice(0, 5);
+        const currentSelectedId = localStorage.getItem('selected_car_id');
         let activeFound = false;
 
-        validRecentIds.forEach(id => {
+        for (let id in cars) {
             const carObj = cars[id];
-            if (carObj) {
+            if (carObj && carObj.name) {
                 const opt = document.createElement('option');
                 const displayName = (carObj.plate && carObj.plate !== 'Б/Н') 
                     ? `${carObj.name} (${carObj.plate})` 
@@ -232,20 +225,12 @@
                 opt.value = id;
                 opt.innerText = displayName;
 
-                if (currentSelectedId && currentSelectedId === id) {
+                if (String(currentSelectedId) === String(id)) {
                     opt.selected = true;
                     activeFound = true;
                 }
                 select.appendChild(opt);
             }
-        });
-
-        if (currentSelectedId && !activeFound && cars[currentSelectedId]) {
-            validRecentIds.unshift(currentSelectedId);
-            validRecentIds = validRecentIds.slice(0, 5);
-            localStorage.setItem('recent_car_ids', JSON.stringify(validRecentIds));
-            updateCarList();
-            return;
         }
 
         if (!activeFound) {
@@ -266,12 +251,6 @@
             localStorage.setItem('selectedCar', JSON.stringify(car));
             localStorage.setItem('selected_car_id', selectedKey);
             localStorage.setItem('selected_car_name', car.name);
-
-            let recentCarIds = JSON.parse(localStorage.getItem('recent_car_ids')) || [];
-            recentCarIds = recentCarIds.filter(id => id !== selectedKey);
-            recentCarIds.unshift(selectedKey);
-            recentCarIds = recentCarIds.slice(0, 5);
-            localStorage.setItem('recent_car_ids', JSON.stringify(recentCarIds));
             
             calculate();
         } else {
@@ -293,7 +272,6 @@
 
         customList.forEach(c => {
             const val = parseFloat(c.val) || 0;
-            
             if (c.id === 'k4') k4 = val;
             if (c.id === 'k5') k5 = val;
 
@@ -311,14 +289,9 @@
         const activeContainer = document.getElementById('active_coeffs_list');
         const sysKElem = document.getElementById('sys_k_val');
 
-        if (sysKElem) {
-            sysKElem.innerText = baseSysK.toFixed(1) + "%";
-        }
-
+        if (sysKElem) sysKElem.innerText = baseSysK.toFixed(1) + "%";
         if (activeContainer) {
-            activeContainer.innerHTML = activeHTML.length > 0 
-                ? activeHTML.join('<br>') 
-                : "<i>Всі коефіцієнти 0% (не застосовано)</i>";
+            activeContainer.innerHTML = activeHTML.length > 0 ? activeHTML.join('<br>') : "<i>Всі коефіцієнти 0%</i>";
         }
 
         return { baseSysK, k4, k5 };
@@ -354,8 +327,7 @@
             document.getElementById(id).value = (id === 'm_name') ? "" : (id === 'm_cargo' ? "-" : 0);
         });
 
-        const topHwyBtn = document.getElementById('m_is_hwy');
-        topHwyBtn.classList.remove('active');
+        document.getElementById('m_is_hwy').classList.remove('active');
         document.getElementById('m_indk').disabled = false;
 
         calculate();
@@ -379,17 +351,11 @@
                         }
                     }
                 } else {
-                    indK = 0; // Для траси міський коефіцієнт завжди 0
+                    indK = 0;
                 }
 
                 appendRow(cleanRouteName, item.km || item.dist || 0, "-", 0, indK, isHwy);
             });
-        } else if (typeof data === 'object') {
-            for (let cityName in data) {
-                let isHwy = (cityName === "Траса" || cityName.toLowerCase().includes("(траса)"));
-                let indK = isHwy ? 0 : (cityDb[cityName] || 0);
-                appendRow(cityName, parseFloat(data[cityName]).toFixed(1), "-", 0, indK, isHwy);
-            }
         }
         calculate();
     }
@@ -403,7 +369,7 @@
         const actualIndK = isHighway ? 0 : indk;
 
         row.innerHTML = `
-            <td><span class="drag-handle" title="Перетягніть для зміни порядку">⋮⋮</span></td>
+            <td><span class="drag-handle">⋮⋮</span></td>
             <td><input type="text" value="${cleanEmoji(route)}"></td>
             <td><input type="number" value="${dist}" oninput="calculate()"></td>
             <td><input type="text" value="${cargo || '-'}"></td>
@@ -411,8 +377,8 @@
             <td><input type="number" value="${actualIndK}" ${disabledAttr} style="color:#d35400 !important;" data-old-val="${indk}" oninput="calculate()"></td>
             <td><button class="${hwyClass}" onclick="toggleRowHwyBtn(this)">Т</button></td>
             <td style="white-space: nowrap;">
-                <button class="btn-row-action btn-row-copy" title="Копіювати рядок" onclick="duplicateRow(this)">📋</button>
-                <button class="btn-row-action btn-row-del" title="Видалити" onclick="this.parentElement.parentElement.remove(); calculate();">✕</button>
+                <button class="btn-row-action btn-row-copy" onclick="duplicateRow(this)">📋</button>
+                <button class="btn-row-action btn-row-del" onclick="this.parentElement.parentElement.remove(); calculate();">✕</button>
             </td>
         `;
 
@@ -442,49 +408,20 @@
         const ins = currentRow.querySelectorAll('input');
         const hwyBtn = currentRow.querySelector('.btn-hwy');
 
-        const route = ins[0].value;
-        const dist = ins[1].value;
-        const cargo = ins[2].value;
-        const weight = ins[3].value;
-        const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-        const indk = isHighway ? 0 : ins[4].value;
-
-        appendRow(route, dist, cargo, weight, indk, isHighway);
+        appendRow(ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, hwyBtn ? hwyBtn.classList.contains('active') : false);
         calculate();
     }
 
     let dragSrcEl = null;
-
     function setupDragAndDrop(row) {
-        row.addEventListener('dragstart', function(e) {
-            dragSrcEl = this;
-            this.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-
-        row.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-        });
-
-        row.addEventListener('dragenter', function() {
-            this.style.background = "#e8f0fe";
-        });
-
-        row.addEventListener('dragleave', function() {
-            this.style.background = "";
-        });
-
+        row.addEventListener('dragstart', function(e) { dragSrcEl = this; this.classList.add('dragging'); });
+        row.addEventListener('dragover', function(e) { e.preventDefault(); });
         row.addEventListener('drop', function(e) {
             e.stopPropagation();
-            this.style.background = "";
             if (dragSrcEl !== this) {
                 const tbody = document.getElementById('city_rows');
                 const rowsArr = Array.from(tbody.children);
-                const srcIdx = rowsArr.indexOf(dragSrcEl);
-                const targetIdx = rowsArr.indexOf(this);
-
-                if (srcIdx < targetIdx) {
+                if (rowsArr.indexOf(dragSrcEl) < rowsArr.indexOf(this)) {
                     tbody.insertBefore(dragSrcEl, this.nextSibling);
                 } else {
                     tbody.insertBefore(dragSrcEl, this);
@@ -492,15 +429,10 @@
                 calculate();
             }
         });
-
-        row.addEventListener('dragend', function() {
-            this.classList.remove('dragging');
-            document.querySelectorAll('#city_rows tr').forEach(r => r.style.background = "");
-        });
+        row.addEventListener('dragend', function() { this.classList.remove('dragging'); });
     }
 
     let trailerActive = false;
-
     function toggleTrailer() {
         const btn = document.getElementById('trailerBtn');
         const container = document.getElementById('trailer_input_container');
@@ -539,16 +471,13 @@
             const km = parseFloat(ins[1].value) || 0;
             const w = parseFloat(ins[3].value) || 0;
             const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-            
-            // Якщо Траса — міський коефіцієнт (indK) примусово 0
             const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
 
             const hwyK = isHighway ? (k4 - k5) : 0;
             const finalK = baseSysK + indK + hwyK;
-            
             const workWeight = w + gTrailler;
             
-            totalQ += (0.01 * car.hsm * km * (1 + 0.01 * finalK)) + (0.01 * (car.hsz || 0) * workWeight * km);
+            totalQ += (0.01 * (car.hsm || car.hsz || 0) * km * (1 + 0.01 * finalK)) + (0.01 * (car.hsz || car.hw || 0) * workWeight * km);
         });
 
         const omRes = (totalQ * (car.om || 0) / 100);
@@ -583,45 +512,72 @@
         return rows;
     }
 
-    function saveCalculationRecord() {
+    // Збереження розрахунку у Supabase чи LocalStorage
+    async function saveCalculationRecord() {
         const rows = getCurrentRowsData();
-        if (rows.length === 0) {
-            alert("Таблиця розрахунку порожня!");
-            return;
-        }
+        if (rows.length === 0) return alert("Таблиця розрахунку порожня!");
 
         const carSelect = document.getElementById('carSelect');
-        if (!carSelect.value) {
-            alert("Будь ласка, спочатку виберіть ТЗ!");
-            return;
-        }
+        if (!carSelect.value) return alert("Оберіть ТЗ!");
 
         const carName = carSelect.options[carSelect.selectedIndex]?.text || "ТЗ";
-        let title = prompt("Введіть назву або примітку розрахунку:", `Розрахунок (${carName}) - ${new Date().toLocaleDateString('uk-UA')}`);
+        let title = prompt("Введіть назву розрахунку:");
         if (!title) return;
         title = cleanEmoji(title);
 
-        const archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-        archives.unshift({
-            id: Date.now(),
-            date: new Date().toLocaleString('uk-UA'),
-            title: title,
-            carName: carName,
-            trailerActive: trailerActive,
-            gTrailler: document.getElementById('g_trailler').value,
-            rows: rows,
-            totalQ: document.getElementById('r_q').innerText
-        });
+        const totalQVal = parseFloat(document.getElementById('r_q').innerText) || 0;
+        const { data: { user } } = await supabase.auth.getUser();
 
-        localStorage.setItem('calc_saved_records', JSON.stringify(archives));
-        renderCalcArchives();
-        alert("Розрахунок успішно збережено в архів!");
+        if (user) {
+            // Збереження в хмару Supabase
+            const { error } = await supabase.from('calc_records').insert([{
+                user_id: user.id,
+                car_name: carName,
+                title: title,
+                total_q: totalQVal,
+                record_data: {
+                    trailerActive: trailerActive,
+                    gTrailler: document.getElementById('g_trailler').value,
+                    rows: rows
+                }
+            }]);
+
+            if (error) {
+                alert("Помилка збереження в базу: " + error.message);
+                return;
+            }
+        } else {
+            // Локальне збереження для гостя
+            let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+            archives.unshift({
+                id: Date.now(),
+                createdAt: new Date().toLocaleString('uk-UA'),
+                title: title,
+                car_name: carName,
+                total_q: totalQVal,
+                record_data: { trailerActive, rows }
+            });
+            localStorage.setItem('calc_saved_records', JSON.stringify(archives));
+        }
+
+        alert("Розрахунок збережено!");
+        await renderCalcArchives();
     }
 
-    function renderCalcArchives() {
-        const archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+    // Відображення збережених розрахунків
+    async function renderCalcArchives() {
         const container = document.getElementById('calcArchiveList');
         container.innerHTML = '';
+
+        let archives = [];
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+            const { data, error } = await supabase.from('calc_records').select('*').order('created_at', { ascending: false });
+            if (!error && data) archives = data;
+        } else {
+            archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+        }
 
         if (archives.length === 0) {
             container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених розрахунків</li>`;
@@ -634,11 +590,9 @@
             li.innerHTML = `
                 <div>
                     <strong>${cleanEmoji(item.title)}</strong>
-                    <br><small style="color:#bdc3c7;">⏱️ ${item.date} | ТЗ: ${item.carName} | Витрата: <b>${item.totalQ} л</b></small>
+                    <br><small style="color:#bdc3c7;">⏱️ ${item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : item.createdAt} | ТЗ: ${item.car_name || item.carName} | Витрата: <b>${item.total_q || item.totalQ} л</b></small>
                 </div>
                 <div style="display:flex; gap:4px;">
-                    <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="loadCalcRecord(${item.id})">📂 Відновити</button>
-                    <button class="btn btn-orange" style="padding:4px 8px; font-size:10px; margin:0;" onclick="editCalcRecord(${item.id})">✏️</button>
                     <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalcRecord(${item.id})">🗑️</button>
                 </div>
             `;
@@ -646,75 +600,27 @@
         });
     }
 
-    function loadCalcRecord(id) {
-        const archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-        const rec = archives.find(a => a.id === id);
-        if (!rec) return;
-
-        if (confirm(`Відновити збережений розрахунок "${rec.title}"?`)) {
-            document.getElementById('city_rows').innerHTML = '';
-
-            if (rec.trailerActive && !trailerActive) {
-                toggleTrailer();
-            } else if (!rec.trailerActive && trailerActive) {
-                toggleTrailer();
+    async function deleteCalcRecord(id) {
+        if (confirm("Видалити цей розрахунок?")) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                await supabase.from('calc_records').delete().eq('id', id);
+            } else {
+                let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+                archives = archives.filter(a => a.id !== id);
+                localStorage.setItem('calc_saved_records', JSON.stringify(archives));
             }
-            
-            if (rec.gTrailler) {
-                document.getElementById('g_trailler').value = rec.gTrailler;
-            }
-
-            rec.rows.forEach(r => {
-                appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway);
-            });
-
-            calculate();
-        }
-    }
-
-    function editCalcRecord(id) {
-        let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-        const idx = archives.findIndex(a => a.id === id);
-        if (idx === -1) return;
-
-        let newTitle = prompt("Введіть нову назву/примітку розрахунку:", archives[idx].title);
-        if (!newTitle) return;
-
-        archives[idx].title = cleanEmoji(newTitle);
-        localStorage.setItem('calc_saved_records', JSON.stringify(archives));
-        renderCalcArchives();
-    }
-
-    function deleteCalcRecord(id) {
-        if (confirm("Видалити цей запис з архіву розрахунків?")) {
-            let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-            archives = archives.filter(a => a.id !== id);
-            localStorage.setItem('calc_saved_records', JSON.stringify(archives));
-            renderCalcArchives();
+            await renderCalcArchives();
         }
     }
 
     function saveForReport() {
         const selectedKey = document.getElementById('carSelect').value;
         const car = JSON.parse(localStorage.getItem('selectedCar'));
-        if (!selectedKey || !car) { alert("Будь ласка, оберіть автомобіль!"); return; }
+        if (!selectedKey || !car) { alert("Оберіть автомобіль!"); return; }
 
         const { baseSysK, k4, k5 } = displayActiveCoeffs();
-        
-        const customList = JSON.parse(localStorage.getItem('custom_coeffs_list')) || [];
-        let activeCoeffsList = [];
-
-        customList.forEach(c => {
-            const val = parseFloat(c.val) || 0;
-            if (val > 0) {
-                const prefix = c.type === 'minus' ? '-' : '+';
-                activeCoeffsList.push(`${c.title}: ${prefix}${val}%`);
-            }
-        });
-
-        let distCity = 0;
-        let distOut = 0;
-        let maxWeight = 0;
+        let distCity = 0, distOut = 0, maxWeight = 0;
         const rows = [];
 
         document.querySelectorAll('#city_rows tr').forEach(row => {
@@ -728,39 +634,21 @@
             const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
             const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
 
-            if (isHighway) {
-                distOut += dist;
-            } else {
-                distCity += dist;
-            }
-
+            if (isHighway) distOut += dist; else distCity += dist;
             maxWeight = Math.max(maxWeight, weight);
 
-            const rowSysK = isHighway ? (baseSysK + k4 - k5) : baseSysK;
-
-            rows.push({ route, dist, cargo, weight, indK, isHighway, rowSysK });
+            rows.push({ route, dist, cargo, weight, indK, isHighway, rowSysK: isHighway ? (baseSysK + k4 - k5) : baseSysK });
         });
-
-        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
 
         const reportData = {
             carName: car.name,
-            car: car.name,
             plate: car.plate || "Б/Н",
-            hsm: car.hsm,
-            hsz: car.hsz || 0,
-            om: car.om || 0, 
-            ot: car.ot || 0, 
-            os: car.os || 0, 
-            op: car.op || 0,
+            hsm: car.hsm || car.hsz || 0,
+            hsz: car.hsz || car.hw || 0,
+            om: car.om || 0, ot: car.ot || 0, os: car.os || 0, op: car.op || 0,
             sysK: baseSysK,
-            k4: k4,
-            k5: k5,
-            activeCoeffsList: activeCoeffsList,
-            distCity: distCity,
-            distOut: distOut,
-            weight: maxWeight,
-            totalFuel: totalQ,
+            distCity, distOut, weight: maxWeight,
+            totalFuel: parseFloat(document.getElementById('r_q').innerText) || 0,
             rows: rows
         };
 
@@ -768,12 +656,5 @@
         window.open('preview.html', '_blank');
     }
 </script>
-<!-- 1. Завантаження бібліотек Firebase SDK (CDN) -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-<!-- 2. Підключення вашого файлу конфігурації -->
-<script src="firebase-config.js"></script>
 </body>
 </html>
