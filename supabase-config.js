@@ -1,6 +1,5 @@
-// Адреса та публічний ключ проекту Supabase
+// supabase-config.js
 const SUPABASE_URL = "https://rtkwhwutvetrnmjvoumx.supabase.co";
-const SUPABASE_KEY = "СЮДИ_ВСТАВТЕ_ВАШ_СКОПІЙОВАНИЙ_PUBLISHABLE_KEY";
+const SUPABASE_KEY = "sb_publishable__fcDGg8MxlwsFS6IFtKESg_sR94Otp1";
 
-// Створення єдиного глобального клієнта (ВАЖЛИВО: window.supabase)
 window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
