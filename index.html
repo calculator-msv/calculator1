@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Вхід та Реєстрація у систему ТЕМ</title>
+    <style>
+        body { font-family: sans-serif; background: #1b3022; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; box-sizing: border-box; }
+        .card { background: rgba(0,0,0,0.7); padding: 30px; border-radius: 10px; width: 340px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { margin-bottom: 15px; color: #2ecc71; }
+        .tabs { display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px solid #444; }
+        .tab-btn { background: none; border: none; color: #aaa; padding: 10px; cursor: pointer; font-size: 15px; width: 50%; font-weight: bold; }
+        .tab-btn.active { color: #2ecc71; border-bottom: 2px solid #2ecc71; }
+        .form-group { display: none; }
+        .form-group.active { display: block; }
+        input { width: 100%; padding: 12px; margin: 6px 0; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; }
+        button.action-btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; font-size: 16px; }
+        button.action-btn:hover { background: #219150; }
+        .guest-btn { background: #2980b9; margin-top: 10px; width: 100%; padding: 12px; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .guest-btn:hover { background: #1f6694; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 id="form-title">Система ТЕМ</h2>
+    
+    <!-- Перемикач Вхід / Реєстрація -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('login')">ВХІД</button>
+        <button class="tab-btn" onclick="switchTab('register')">РЕЄСТРАЦІЯ</button>
+    </div>
+
+    <!-- ФОРМА ВХОДУ -->
+    <div id="login-form" class="form-group active">
+        <input type="email" id="login-email" placeholder="Email (Електронна пошта)">
+        <input type="password" id="login-password" placeholder="Пароль">
+        <button class="action-btn" onclick="handleLogin()">УВІЙТИ</button>
+    </div>
+
+    <!-- ФОРМА РЕЄСТРАЦІЇ -->
+    <div id="register-form" class="form-group">
+        <input type="text" id="reg-fullname" placeholder="ПІБ або Підрозділ">
+        <input type="email" id="reg-email" placeholder="Email (Електронна пошта)">
+        <input type="password" id="reg-password" placeholder="Пароль (від 6 символів)">
+        <button class="action-btn" onclick="handleRegister()">ЗАРЕЄСТРУВАТИСЯ</button>
+    </div>
+
+    <button onclick="loginAsGuest()" class="guest-btn">УВІЙТИ ЯК ГІСТЬ</button>
+</div>
+
+<!-- Підключення Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<script>
+    // Конфігурація вашого Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyBF8fvgM_-QaRJQCVDjsO61mYS8w30Svbo",
+        authDomain: "dpsu-calculator-db.firebaseapp.com",
+        projectId: "dpsu-calculator-db",
+        storageBucket: "dpsu-calculator-db.firebasestorage.app",
+        messagingSenderId: "1008100932764",
+        appId: "1:1008100932764:web:c3d22b135d9dcf866f4159",
+        measurementId: "G-8PDNTXSCD2"
+    };
+
+    // Ініціалізація
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Перемикання вкладок
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.form-group').forEach(form => form.classList.remove('active'));
+
+        if (tab === 'login') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('login-form').classList.add('active');
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('register-form').classList.add('active');
+        }
+    }
+
+    // 1. РЕЄСТРАЦІЯ НОВОГО КОРИСТУВАЧА
+    async function handleRegister() {
+        const fullName = document.getElementById('reg-fullname').value.trim();
+        const email = document.getElementById('reg-email').value.trim();
+        const password = document.getElementById('reg-password').value.trim();
+
+        if (!fullName || !email || !password) {
+            alert("Заповніть усі поля реєстрації!");
+            return;
+        }
+
+        if (password.length < 6) {
+            alert("Пароль повинен бути не менше 6 символів!");
+            return;
+        }
+
+        try {
+            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            // Збереження даних у хмару Firestore
+            await db.collection("users").doc(user.uid).set({
+                fullName: fullName,
+                email: email,
+                role: "guest",
+                createdAt: new Date()
+            });
+
+            // Збереження в локальну сесію
+            localStorage.setItem('currentUser', JSON.stringify({
+                uid: user.uid,
+                username: fullName,
+                email: email,
+                role: 'guest'
+            }));
+
+            alert("Акаунт успішно створено!");
+            window.location.href = 'home.html';
+        } catch (error) {
+            alert("Помилка реєстрації: " + error.message);
+        }
+    }
+
+    // 2. ВХІД КОРИСТУВАЧА / АДМІНА
+    async function handleLogin() {
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value.trim();
+
+        if (!email || !password) {
+            alert("Введіть Email та пароль!");
+            return;
+        }
+
+        try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            // Отримання даних з Firestore про роль
+            const userDoc = await db.collection("users").doc(user.uid).get();
+            let role = 'guest';
+            let username = email;
+
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                role = userData.role || 'guest';
+                username = userData.fullName || email;
+            }
+
+            localStorage.setItem('currentUser', JSON.stringify({
+                uid: user.uid,
+                username: username,
+                email: email,
+                role: role
+            }));
+
+            // Перенаправлення відповідно до ролі
+            if (role === 'admin' || role === 'programmer') {
+                alert(`Успішний вхід! Вітаємо, ${username} (Адміністратор)`);
+                window.location.href = 'admin.html';
+            } else {
+                alert(`Успішний вхід! Вітаємо, ${username}`);
+                window.location.href = 'home.html';
+            }
+        } catch (error) {
+            alert("Помилка входу: " + error.message);
+        }
+    }
+
+    // 3. ВХІД ЯК ГІСТЬ
+    function loginAsGuest() {
+        const user = { username: 'Гість', role: 'guest' };
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        window.location.href = 'home.html';
+    }
+</script>
+
+</body>
+</html>
