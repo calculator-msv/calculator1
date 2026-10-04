@@ -162,6 +162,30 @@
 </div>
 
 <script>
+	// Перевірка та відображення поточного користувача
+function checkUserSession() {
+    const userData = JSON.parse(localStorage.getItem('currentUser'));
+    const displayElem = document.getElementById('user-display');
+    
+    if (userData && userData.username) {
+        displayElem.innerText = `👤 ${userData.username}`;
+    } else {
+        displayElem.innerText = "👤 Гість (без акаунта)";
+    }
+}
+
+// Функція виходу з акаунта
+async function logout() {
+    if (typeof supabase !== 'undefined' && supabase.auth) {
+        await supabase.auth.signOut();
+    }
+    localStorage.clear();
+    window.location.href = 'index.html';
+}
+
+// Виклик перевірки при завантаженні сторінки
+window.addEventListener('DOMContentLoaded', checkUserSession);
+	
     function cleanEmoji(text) {
         if (!text) return "";
         return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
