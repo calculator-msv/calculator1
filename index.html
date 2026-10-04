@@ -80,61 +80,72 @@
     }
 
     // РЕЄСТРАЦІЯ
-    async function handleRegister() {
-        const client = getSupabaseClient();
-        if (!client) {
-            alert("Помилка: Файл supabase-config.js не знайдено або ключ не вказано!");
-            return;
-        }
+async function handleRegister() {
+    const client = getSupabaseClient();
+    if (!client) {
+        alert("Помилка: Файл supabase-config.js не підключено або в ньому помилка!");
+        return;
+    }
 
-        const fullName = document.getElementById('reg-fullname').value.trim();
-        const email = document.getElementById('reg-email').value.trim();
-        const password = document.getElementById('reg-password').value.trim();
+    const fullName = document.getElementById('reg-fullname').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value.trim();
 
-        if (!fullName || !email || !password) {
-            alert("Будь ласка, заповніть усі поля!");
-            return;
-        }
+    if (!fullName || !email || !password) {
+        alert("Будь ласка, заповніть усі поля!");
+        return;
+    }
 
-        if (password.length < 6) {
-            alert("Пароль має бути не менше 6 символів!");
-            return;
-        }
+    if (password.length < 6) {
+        alert("Пароль має містити щонайменше 6 символів!");
+        return;
+    }
 
-        try {
-            const { data, error } = await client.auth.signUp({
-                email: email,
-                password: password
-            });
-
-            if (error) {
-                alert("Помилка реєстрації: " + error.message);
-                return;
+    try {
+        // Реєстрація через Supabase Auth
+        const { data, error } = await client.auth.signUp({
+            email: email,
+            password: password,
+            options: {
+                data: {
+                    full_name: fullName
+                }
             }
+        });
 
-            if (data.user) {
-                await client.from('profiles').insert([{
+        if (error) {
+            alert("Помилка реєстрації: " + error.message);
+            return;
+        }
+
+        if (data.user) {
+            // Збереження профілю у БД (за потреби)
+            try {
+                await client.from('profiles').upsert([{
                     id: data.user.id,
                     full_name: fullName,
                     email: email,
                     role: 'user'
                 }]);
-
-                localStorage.clear();
-                localStorage.setItem('currentUser', JSON.stringify({
-                    uid: data.user.id,
-                    username: fullName,
-                    email: email,
-                    role: 'user'
-                }));
-
-                alert("Акаунт успішно створено!");
-                window.location.href = 'home.html';
+            } catch(e) {
+                console.log("Профіль буде створено автоматично через тригер");
             }
-        } catch (err) {
-            alert("Помилка: " + err.message);
+
+            localStorage.clear();
+            localStorage.setItem('currentUser', JSON.stringify({
+                uid: data.user.id,
+                username: fullName,
+                email: email,
+                role: 'user'
+            }));
+
+            alert("Акаунт успішно створено!");
+            window.location.href = 'home.html';
         }
+    } catch (err) {
+        alert("Помилка реєстрації: " + err.message);
     }
+}
 
     // ВХІД
     async function handleLogin() {
