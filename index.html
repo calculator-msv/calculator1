@@ -19,9 +19,9 @@
         .guest-btn:hover { background: #1f6694; }
     </style>
 
-    <!-- 1. Підключення бібліотеки Supabase JS SDK -->
+    <!-- 1. Завантаження бібліотеки Supabase JS SDK (звіряйте версію) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- 2. Підключення файлу конфігурації -->
+    <!-- 2. Підключення вашого файлу конфігурації -->
     <script src="supabase-config.js"></script>
 </head>
 <body>
@@ -54,7 +54,7 @@
 </div>
 
 <script>
-    // Перемикання вкладок Вхід / Реєстрація
+    // Перемикач вкладок
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.form-group').forEach(form => form.classList.remove('active'));
@@ -68,8 +68,25 @@
         }
     }
 
-    // РЕЄСТРАЦІЯ КОРИСТУВАЧА
+    // Перевірка готовності підключення Supabase
+    function getSupabaseClient() {
+        if (typeof window.supabase !== 'undefined' && window.supabase.auth) {
+            return window.supabase;
+        }
+        if (typeof supabase !== 'undefined' && supabase.auth) {
+            return supabase;
+        }
+        return null;
+    }
+
+    // РЕЄСТРАЦІЯ
     async function handleRegister() {
+        const client = getSupabaseClient();
+        if (!client) {
+            alert("Помилка: Файл supabase-config.js не знайдено або ключ не вказано!");
+            return;
+        }
+
         const fullName = document.getElementById('reg-fullname').value.trim();
         const email = document.getElementById('reg-email').value.trim();
         const password = document.getElementById('reg-password').value.trim();
@@ -80,12 +97,12 @@
         }
 
         if (password.length < 6) {
-            alert("Пароль має містити щонайменше 6 символів!");
+            alert("Пароль має бути не менше 6 символів!");
             return;
         }
 
         try {
-            const { data, error } = await supabase.auth.signUp({
+            const { data, error } = await client.auth.signUp({
                 email: email,
                 password: password
             });
@@ -96,7 +113,7 @@
             }
 
             if (data.user) {
-                await supabase.from('profiles').insert([{
+                await client.from('profiles').insert([{
                     id: data.user.id,
                     full_name: fullName,
                     email: email,
@@ -115,12 +132,18 @@
                 window.location.href = 'home.html';
             }
         } catch (err) {
-            alert("Помилка виконання: " + err.message);
+            alert("Помилка: " + err.message);
         }
     }
 
-    // ВХІД У СИСТЕМУ
+    // ВХІД
     async function handleLogin() {
+        const client = getSupabaseClient();
+        if (!client) {
+            alert("Помилка: Файл supabase-config.js не знайдено або ключ не вказано!");
+            return;
+        }
+
         const email = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value.trim();
 
@@ -130,7 +153,7 @@
         }
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await client.auth.signInWithPassword({
                 email: email,
                 password: password
             });
@@ -140,7 +163,7 @@
             } else {
                 localStorage.clear();
 
-                const { data: profile } = await supabase
+                const { data: profile } = await client
                     .from('profiles')
                     .select('*')
                     .eq('id', data.user.id)
@@ -164,10 +187,11 @@
         }
     }
 
-    // ВХІД ЯК ГІСТЬ
+    // ВХІД ЯК ГІСТЬ (ПРАЦЮЄ НАВІТЬ БЕЗ ПОДАТКОВИХ СКРИПТІВ)
     async function loginAsGuest() {
-        if (typeof supabase !== 'undefined') {
-            await supabase.auth.signOut();
+        const client = getSupabaseClient();
+        if (client) {
+            try { await client.auth.signOut(); } catch (e) {}
         }
         localStorage.clear();
         localStorage.setItem('currentUser', JSON.stringify({ username: 'Гість', role: 'guest', uid: 'guest_local' }));
