@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Вхід та Реєстрація у систему ТЕМ</title>
+    <title>Вхід та Реєстрація у систему ТЕМ (Supabase)</title>
     <style>
         body { font-family: sans-serif; background: #1b3022; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; box-sizing: border-box; }
         .card { background: rgba(0,0,0,0.7); padding: 30px; border-radius: 10px; width: 340px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
@@ -18,6 +18,11 @@
         .guest-btn { background: #2980b9; margin-top: 10px; width: 100%; padding: 12px; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .guest-btn:hover { background: #1f6694; }
     </style>
+
+    <!-- 1. Завантаження бібліотеки Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Файл конфігурації Supabase -->
+    <script src="supabase-config.js"></script>
 </head>
 <body>
 
@@ -34,7 +39,7 @@
     <div id="login-form" class="form-group active">
         <input type="email" id="login-email" placeholder="Email (Електронна пошта)">
         <input type="password" id="login-password" placeholder="Пароль">
-        <button class="action-btn" onclick="handleLogin()">УВІЙТИ</button>
+        <button class="action-btn" type="button" onclick="handleLogin()">УВІЙТИ</button>
     </div>
 
     <!-- ФОРМА РЕЄСТРАЦІЇ -->
@@ -42,34 +47,13 @@
         <input type="text" id="reg-fullname" placeholder="ПІБ або Підрозділ">
         <input type="email" id="reg-email" placeholder="Email (Електронна пошта)">
         <input type="password" id="reg-password" placeholder="Пароль (від 6 символів)">
-        <button class="action-btn" onclick="handleRegister()">ЗАРЕЄСТРУВАТИСЯ</button>
+        <button class="action-btn" type="button" onclick="handleRegister()">ЗАРЕЄСТРУВАТИСЯ</button>
     </div>
 
-    <button onclick="loginAsGuest()" class="guest-btn">УВІЙТИ ЯК ГІСТЬ</button>
+    <button type="button" onclick="loginAsGuest()" class="guest-btn">УВІЙТИ ЯК ГІСТЬ</button>
 </div>
 
-<!-- Підключення Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
 <script>
-    // Конфігурація вашого Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyBF8fvgM_-QaRJQCVDjsO61mYS8w30Svbo",
-        authDomain: "dpsu-calculator-db.firebaseapp.com",
-        projectId: "dpsu-calculator-db",
-        storageBucket: "dpsu-calculator-db.firebasestorage.app",
-        messagingSenderId: "1008100932764",
-        appId: "1:1008100932764:web:c3d22b135d9dcf866f4159",
-        measurementId: "G-8PDNTXSCD2"
-    };
-
-    // Ініціалізація
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
     // Перемикання вкладок
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -100,34 +84,39 @@
             return;
         }
 
-        try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            const user = userCredential.user;
+        const { data, error } = await supabase.auth.signUp({
+            email: email,
+            password: password
+        });
 
-            // Збереження даних у хмару Firestore
-            await db.collection("users").doc(user.uid).set({
-                fullName: fullName,
+        if (error) {
+            alert("Помилка реєстрації: " + error.message);
+            return;
+        }
+
+        if (data.user) {
+            // Збереження профілю у таблицю profiles Supabase
+            await supabase.from('profiles').insert([{
+                id: data.user.id,
+                full_name: fullName,
                 email: email,
-                role: "guest",
-                createdAt: new Date()
-            });
+                role: 'user'
+            }]);
 
-            // Збереження в локальну сесію
+            localStorage.clear();
             localStorage.setItem('currentUser', JSON.stringify({
-                uid: user.uid,
+                uid: data.user.id,
                 username: fullName,
                 email: email,
-                role: 'guest'
+                role: 'user'
             }));
 
             alert("Акаунт успішно створено!");
             window.location.href = 'home.html';
-        } catch (error) {
-            alert("Помилка реєстрації: " + error.message);
         }
     }
 
-    // 2. ВХІД КОРИСТУВАЧА / АДМІНА
+    // 2. ВХІД КОРИСТУВАЧА
     async function handleLogin() {
         const email = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value.trim();
@@ -137,45 +126,43 @@
             return;
         }
 
-        try {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const user = userCredential.user;
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
 
-            // Отримання даних з Firestore про роль
-            const userDoc = await db.collection("users").doc(user.uid).get();
-            let role = 'guest';
-            let username = email;
+        if (error) {
+            alert("Помилка входу: " + error.message);
+        } else {
+            localStorage.clear();
 
-            if (userDoc.exists) {
-                const userData = userDoc.data();
-                role = userData.role || 'guest';
-                username = userData.fullName || email;
-            }
+            // Отримання ролі з профілю
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', data.user.id)
+                .single();
+
+            const username = profile ? profile.full_name : email;
+            const role = profile ? profile.role : 'user';
 
             localStorage.setItem('currentUser', JSON.stringify({
-                uid: user.uid,
+                uid: data.user.id,
                 username: username,
                 email: email,
                 role: role
             }));
 
-            // Перенаправлення відповідно до ролі
-            if (role === 'admin' || role === 'programmer') {
-                alert(`Успішний вхід! Вітаємо, ${username} (Адміністратор)`);
-                window.location.href = 'admin.html';
-            } else {
-                alert(`Успішний вхід! Вітаємо, ${username}`);
-                window.location.href = 'home.html';
-            }
-        } catch (error) {
-            alert("Помилка входу: " + error.message);
+            alert(`Успішний вхід! Вітаємо, ${username}`);
+            window.location.href = (role === 'admin' || role === 'programmer') ? 'admin.html' : 'home.html';
         }
     }
 
     // 3. ВХІД ЯК ГІСТЬ
-    function loginAsGuest() {
-        const user = { username: 'Гість', role: 'guest' };
-        localStorage.setItem('currentUser', JSON.stringify(user));
+    async function loginAsGuest() {
+        await supabase.auth.signOut();
+        localStorage.clear();
+        localStorage.setItem('currentUser', JSON.stringify({ username: 'Гість', role: 'guest', uid: 'guest_local' }));
         window.location.href = 'home.html';
     }
 </script>
