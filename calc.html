@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>ТЕМ - Калькулятор (Оптимізований Supabase)</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; display: flex; padding: 20px; gap: 20px; margin: 0; min-height: 100vh; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; display: flex; padding: 20px; gap: 20px; margin: 0; min-height: 100vh; box-sizing: border-box; }
         .side-panel { width: 320px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); height: fit-content; }
         .main-content { flex-grow: 1; background: rgba(255,255,255,0.05); padding: 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
         
@@ -64,12 +64,13 @@
     <script src="supabase-config.js"></script>
 </head>
 <body onfocus="syncData()">
+
 <!-- Шапка авторизованого користувача -->
 <div class="user-header" style="position: absolute; top: 15px; right: 20px; z-index: 100; display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
     <span id="user-display" style="font-weight: bold; color: #2ecc71; font-size: 13px;">Завантаження...</span>
-    <button onclick="logout()" style="background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">Вийти</button>
+    <button type="button" onclick="logout()" style="background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">Вийти</button>
 </div>
-	
+    
 <div class="side-panel">
     <h4 style="color:#f1c40f;">🚗 Автопарк</h4>
     <button class="btn btn-blue" onclick="location.href='cars.html'">БАЗА ТЗ</button>
@@ -100,7 +101,7 @@
 
 <div class="main-content">
     <h3>🧮 РОЗРАХУНОК ЕКСПЛУАТАЦІЇ</h3>
-	
+    
     <label>Конфігурація:</label>
     <button id="trailerBtn" class="btn btn-toggle" onclick="toggleTrailer()">🚚 АВТОПОЇЗД: ВИМКН</button>
 
@@ -162,36 +163,43 @@
 </div>
 
 <script>
-	// Перевірка та відображення поточного користувача
-function checkUserSession() {
-    const userData = JSON.parse(localStorage.getItem('currentUser'));
-    const displayElem = document.getElementById('user-display');
-    
-    if (userData && userData.username) {
-        displayElem.innerText = `👤 ${userData.username}`;
-    } else {
-        displayElem.innerText = "👤 Гість (без акаунта)";
+    // Пошук клієнта Supabase
+    function getSupabaseClient() {
+        if (typeof window.supabase !== 'undefined' && window.supabase.auth) return window.supabase;
+        if (typeof supabase !== 'undefined' && supabase.auth) return supabase;
+        return null;
     }
-}
 
-// Функція виходу з акаунта
-async function logout() {
-    if (typeof supabase !== 'undefined' && supabase.auth) {
-        await supabase.auth.signOut();
+    // Перевірка та відображення поточного користувача
+    function checkUserSession() {
+        const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const displayElem = document.getElementById('user-display');
+        if (displayElem) {
+            if (userData && userData.username) {
+                displayElem.innerText = `👤 ${userData.username}`;
+            } else {
+                displayElem.innerText = "👤 Гість (без акаунта)";
+            }
+        }
     }
-    localStorage.clear();
-    window.location.href = 'index.html';
-}
 
-// Виклик перевірки при завантаженні сторінки
-window.addEventListener('DOMContentLoaded', checkUserSession);
-	
+    // Функція виходу з акаунта
+    async function logout() {
+        const client = getSupabaseClient();
+        if (client) {
+            try { await client.auth.signOut(); } catch (e) {}
+        }
+        localStorage.clear();
+        window.location.href = 'index.html';
+    }
+
     function cleanEmoji(text) {
         if (!text) return "";
         return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
     }
 
     window.onload = async function() {
+        checkUserSession();
         await syncData();
         await renderCalcArchives();
     };
@@ -215,6 +223,7 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
     // Завантаження списку авто користувача з Supabase або LocalStorage
     async function updateCarList() {
         const select = document.getElementById('carSelect');
+        if (!select) return;
         select.innerHTML = '';
 
         const defaultOpt = document.createElement('option');
@@ -225,16 +234,22 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
         select.appendChild(defaultOpt);
 
         let cars = {};
-        const { data: { user } } = await supabase.auth.getUser();
+        const client = getSupabaseClient();
 
-        if (user) {
-            // Зчитати авто з бази Supabase
-            const { data, error } = await supabase.from('cars').select('*');
-            if (!error && data) {
-                data.forEach(c => {
-                    cars[c.id] = c;
-                });
-                localStorage.setItem('cars', JSON.stringify(cars));
+        if (client) {
+            try {
+                const { data: { user } } = await client.auth.getUser();
+                if (user) {
+                    const { data, error } = await client.from('cars').select('*');
+                    if (!error && data) {
+                        data.forEach(c => { cars[c.id] = c; });
+                        localStorage.setItem('cars', JSON.stringify(cars));
+                    }
+                } else {
+                    cars = JSON.parse(localStorage.getItem('cars')) || {};
+                }
+            } catch(e) {
+                cars = JSON.parse(localStorage.getItem('cars')) || {};
             }
         } else {
             cars = JSON.parse(localStorage.getItem('cars')) || {};
@@ -245,11 +260,12 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
 
         for (let id in cars) {
             const carObj = cars[id];
-            if (carObj && carObj.name) {
+            if (carObj && (carObj.name || carObj.brand)) {
                 const opt = document.createElement('option');
+                const name = carObj.name || carObj.brand;
                 const displayName = (carObj.plate && carObj.plate !== 'Б/Н') 
-                    ? `${carObj.name} (${carObj.plate})` 
-                    : carObj.name;
+                    ? `${name} (${carObj.plate})` 
+                    : name;
 
                 opt.value = id;
                 opt.innerText = displayName;
@@ -279,7 +295,7 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
             
             localStorage.setItem('selectedCar', JSON.stringify(car));
             localStorage.setItem('selected_car_id', selectedKey);
-            localStorage.setItem('selected_car_name', car.name);
+            localStorage.setItem('selected_car_name', car.name || car.brand);
             
             calculate();
         } else {
@@ -555,55 +571,76 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
         title = cleanEmoji(title);
 
         const totalQVal = parseFloat(document.getElementById('r_q').innerText) || 0;
-        const { data: { user } } = await supabase.auth.getUser();
+        const client = getSupabaseClient();
 
-        if (user) {
-            // Збереження в хмару Supabase
-            const { error } = await supabase.from('calc_records').insert([{
-                user_id: user.id,
-                car_name: carName,
-                title: title,
-                total_q: totalQVal,
-                record_data: {
-                    trailerActive: trailerActive,
-                    gTrailler: document.getElementById('g_trailler').value,
-                    rows: rows
+        if (client) {
+            try {
+                const { data: { user } } = await client.auth.getUser();
+                if (user) {
+                    const { error } = await client.from('calc_records').insert([{
+                        user_id: user.id,
+                        car_name: carName,
+                        title: title,
+                        total_q: totalQVal,
+                        record_data: {
+                            trailerActive: trailerActive,
+                            gTrailler: document.getElementById('g_trailler').value,
+                            rows: rows
+                        }
+                    }]);
+
+                    if (error) {
+                        alert("Помилка збереження в базу: " + error.message);
+                        return;
+                    }
+                } else {
+                    saveLocalArchive(title, carName, totalQVal, rows);
                 }
-            }]);
-
-            if (error) {
-                alert("Помилка збереження в базу: " + error.message);
-                return;
+            } catch(e) {
+                saveLocalArchive(title, carName, totalQVal, rows);
             }
         } else {
-            // Локальне збереження для гостя
-            let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-            archives.unshift({
-                id: Date.now(),
-                createdAt: new Date().toLocaleString('uk-UA'),
-                title: title,
-                car_name: carName,
-                total_q: totalQVal,
-                record_data: { trailerActive, rows }
-            });
-            localStorage.setItem('calc_saved_records', JSON.stringify(archives));
+            saveLocalArchive(title, carName, totalQVal, rows);
         }
 
         alert("Розрахунок збережено!");
         await renderCalcArchives();
     }
 
+    function saveLocalArchive(title, carName, totalQVal, rows) {
+        let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+        archives.unshift({
+            id: Date.now(),
+            createdAt: new Date().toLocaleString('uk-UA'),
+            title: title,
+            car_name: carName,
+            total_q: totalQVal,
+            record_data: { trailerActive, rows }
+        });
+        localStorage.setItem('calc_saved_records', JSON.stringify(archives));
+    }
+
     // Відображення збережених розрахунків
     async function renderCalcArchives() {
         const container = document.getElementById('calcArchiveList');
+        if (!container) return;
         container.innerHTML = '';
 
         let archives = [];
-        const { data: { user } } = await supabase.auth.getUser();
+        const client = getSupabaseClient();
 
-        if (user) {
-            const { data, error } = await supabase.from('calc_records').select('*').order('created_at', { ascending: false });
-            if (!error && data) archives = data;
+        if (client) {
+            try {
+                const { data: { user } } = await client.auth.getUser();
+                if (user) {
+                    const { data, error } = await client.from('calc_records').select('*').order('created_at', { ascending: false });
+                    if (!error && data) archives = data;
+                } else {
+                    archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+                }
+            } catch(e) {
+                archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+            }
         } else {
             archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
         }
@@ -622,7 +659,7 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
                     <br><small style="color:#bdc3c7;">⏱️ ${item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : item.createdAt} | ТЗ: ${item.car_name || item.carName} | Витрата: <b>${item.total_q || item.totalQ} л</b></small>
                 </div>
                 <div style="display:flex; gap:4px;">
-                    <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalcRecord(${item.id})">🗑️</button>
+                    <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalcRecord('${item.id}')">🗑️</button>
                 </div>
             `;
             container.appendChild(li);
@@ -631,16 +668,29 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
 
     async function deleteCalcRecord(id) {
         if (confirm("Видалити цей розрахунок?")) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                await supabase.from('calc_records').delete().eq('id', id);
+            const client = getSupabaseClient();
+            if (client) {
+                try {
+                    const { data: { user } } = await client.auth.getUser();
+                    if (user) {
+                        await client.from('calc_records').delete().eq('id', id);
+                    } else {
+                        deleteLocalArchive(id);
+                    }
+                } catch(e) {
+                    deleteLocalArchive(id);
+                }
             } else {
-                let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
-                archives = archives.filter(a => a.id !== id);
-                localStorage.setItem('calc_saved_records', JSON.stringify(archives));
+                deleteLocalArchive(id);
             }
             await renderCalcArchives();
         }
+    }
+
+    function deleteLocalArchive(id) {
+        let archives = JSON.parse(localStorage.getItem('calc_saved_records')) || [];
+        archives = archives.filter(a => String(a.id) !== String(id));
+        localStorage.setItem('calc_saved_records', JSON.stringify(archives));
     }
 
     function saveForReport() {
@@ -670,7 +720,7 @@ window.addEventListener('DOMContentLoaded', checkUserSession);
         });
 
         const reportData = {
-            carName: car.name,
+            carName: car.name || car.brand,
             plate: car.plate || "Б/Н",
             hsm: car.hsm || car.hsz || 0,
             hsz: car.hsz || car.hw || 0,
