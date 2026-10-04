@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>База ТЗ - Керування</title>
+    <title>База ТЗ - Керування (Supabase)</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         .sidebar { width: 340px; background: rgba(0,0,0,0.4); padding: 20px; border-right: 2px solid #2ecc71; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto; }
@@ -44,6 +44,11 @@
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
+
+    <!-- 1. Підключення Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Файл конфігурації Supabase -->
+    <script src="supabase-config.js"></script>
 </head>
 <body>
 
@@ -150,9 +155,36 @@
         }
     }
 
-    function render() {
+    async function render() {
         updateCategorySelect();
-        const db = JSON.parse(localStorage.getItem('cars')) || {};
+        let db = {};
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+            // Зчитуємо тільки авто авторизованого користувача з Supabase
+            const { data, error } = await supabase.from('cars').select('*');
+            if (!error && data) {
+                data.forEach(car => {
+                    db[car.id] = {
+                        id: car.id,
+                        name: car.name,
+                        plate: car.plate,
+                        category: car.category || "Вантажні",
+                        hsm: car.hsm,
+                        hsz: car.hw,
+                        om: car.om,
+                        ot: car.ot,
+                        os: car.os,
+                        op: car.op
+                    };
+                });
+                localStorage.setItem('cars', JSON.stringify(db));
+            }
+        } else {
+            db = JSON.parse(localStorage.getItem('cars')) || {};
+        }
+
         const container = document.getElementById('categoryContainer');
         container.innerHTML = "";
 
@@ -195,12 +227,8 @@
                                 <div class="detail-grid">
                                     <span><b>Hs (базова):</b> ${car.hsm} л</span>
                                     <span><b>Hw (вантаж):</b> ${car.hsz || 0} л</span>
-                                    <span><b>Макс. вантаж:</b> ${car.maxPayload ? car.maxPayload + ' т' : 'Н/Д'}</span>
-                                    <span><b>AdBlue норма:</b> ${car.hasAdBlue ? car.adBlueRate + '%' : 'Ні'}</span>
                                     <span><b>Моторна (M):</b> ${car.om} л</span>
                                     <span><b>Трансм. (T):</b> ${car.ot} л</span>
-                                    <span><b>Спеціальна (S):</b> ${car.os} л</span>
-                                    <span><b>Пластична (P):</b> ${car.op} л</span>
                                 </div>
                                 <button class="btn-select-calc" onclick="event.stopPropagation(); selectForCalc('${id}')">Обрати для розрахунку</button>
                             </div>
@@ -240,7 +268,7 @@
         el.style.display = isVisible ? 'none' : 'block';
     }
 
-    function addCar() {
+    async function addCar() {
         const name = document.getElementById('n_name').value.trim();
         const plate = document.getElementById('n_plate').value.trim();
         
@@ -249,51 +277,61 @@
             return;
         }
 
-        let db = JSON.parse(localStorage.getItem('cars')) || {};
-        const id = name + (plate ? "_" + plate : "");
+        const { data: { user } } = await supabase.auth.getUser();
 
-        const hasCargo = document.getElementById('n_has_cargo').checked;
-        const hasAdBlue = document.getElementById('n_has_adblue').checked;
-
-        db[id] = {
-            id: id,
+        const carObj = {
             name: name,
             plate: plate || "Б/Н",
             category: document.getElementById('n_category').value,
             hsm: parseFloat(document.getElementById('n_hsm').value) || 0,
-            hsz: parseFloat(document.getElementById('n_hw').value) || 0,
-            hasCargo: hasCargo,
-            maxPayload: hasCargo ? (parseFloat(document.getElementById('n_max_payload').value) || 0) : 0,
-            hasAdBlue: hasAdBlue,
-            adBlueRate: hasAdBlue ? (parseFloat(document.getElementById('n_adblue_rate').value) || 0) : 0,
+            hw: parseFloat(document.getElementById('n_hw').value) || 0,
             om: parseFloat(document.getElementById('n_om').value) || 0,
             ot: parseFloat(document.getElementById('n_ot').value) || 0,
             os: parseFloat(document.getElementById('n_os').value) || 0,
             op: parseFloat(document.getElementById('n_op').value) || 0
         };
 
-        localStorage.setItem('cars', JSON.stringify(db));
-        
+        if (user) {
+            // Збереження в Supabase
+            carObj.user_id = user.id;
+            const { error } = await supabase.from('cars').insert([carObj]);
+            if (error) {
+                alert("Помилка збереження в хмару: " + error.message);
+                return;
+            }
+        } else {
+            // Збереження локально для гостя
+            let db = JSON.parse(localStorage.getItem('cars')) || {};
+            const id = name + (plate ? "_" + plate : "");
+            db[id] = carObj;
+            localStorage.setItem('cars', JSON.stringify(db));
+        }
+
         document.getElementById('n_name').value = "";
         document.getElementById('n_plate').value = "";
-        render();
+        await render();
         alert("Автомобіль успішно додано!");
     }
 
-    function deleteCar(id) {
+    async function deleteCar(id) {
         if (confirm("Видалити цей автомобіль з бази?")) {
-            let db = JSON.parse(localStorage.getItem('cars')) || {};
-            delete db[id];
-            localStorage.setItem('cars', JSON.stringify(db));
-            
-            // Якщо було вибрано це авто — очищаємо сесію
-            if (localStorage.getItem('selected_car_id') === id) {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                await supabase.from('cars').delete().eq('id', id);
+            } else {
+                let db = JSON.parse(localStorage.getItem('cars')) || {};
+                delete db[id];
+                localStorage.setItem('cars', JSON.stringify(db));
+            }
+
+            if (String(localStorage.getItem('selected_car_id')) === String(id)) {
                 localStorage.removeItem('selected_car_id');
                 localStorage.removeItem('selected_car_name');
                 localStorage.removeItem('selectedCar');
             }
 
-            render();
+            await render();
         }
     }
 
@@ -305,28 +343,14 @@
         if (confirm(`Видалити категорію "${cat}"? Автомобілі перемістяться в перший доступний вид.`)) {
             categories = categories.filter(c => c !== cat);
             localStorage.setItem('car_categories', JSON.stringify(categories));
-
-            let db = JSON.parse(localStorage.getItem('cars')) || {};
-            for (let id in db) {
-                if (db[id].category === cat) db[id].category = categories[0];
-            }
-            localStorage.setItem('cars', JSON.stringify(db));
             render();
         }
     }
 
     function sortCars(type) {
-        let db = JSON.parse(localStorage.getItem('cars')) || {};
-        let sortedEntries = Object.entries(db).sort((a, b) => a[1].name.localeCompare(b[1].name));
-        
-        let newDb = {};
-        sortedEntries.forEach(([key, val]) => { newDb[key] = val; });
-        
-        localStorage.setItem('cars', JSON.stringify(newDb));
         render();
     }
 
-    // ТУТ ВИПРАВЛЕНО ПЕРЕДАЧУ ID ТА НАЗВИ В КЕЛЬКУЛЯТОР
     function selectForCalc(id) {
         let db = JSON.parse(localStorage.getItem('cars')) || {};
         const car = db[id];
@@ -342,6 +366,5 @@
 
     window.onload = render;
 </script>
-
 </body>
 </html>
