@@ -183,31 +183,18 @@
         }
     }
 
-    // Функція виходу з акаунта
     async function logout() {
-        const client = getSupabaseClient();
-        if (client) {
-            try { await client.auth.signOut(); } catch (e) {}
-        }
-        localStorage.clear();
-        window.location.href = 'index.html';
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
+    if (client) {
+        await client.auth.signOut(); // Вихід з сесії Supabase
     }
-
-    function cleanEmoji(text) {
-        if (!text) return "";
-        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-    }
-
-    window.onload = async function() {
-        checkUserSession();
-        await syncData();
-        await renderCalcArchives();
-    };
-
-    window.addEventListener('storage', async () => {
-        await syncData();
-        calculate();
-    });
+    // Очищаємо лише сесійні змінні, а не всю пам'ять
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('selectedCar');
+    localStorage.removeItem('selected_car_id');
+    
+    window.location.href = 'index.html';
+}
 
     async function syncData() {
         await updateCarList();
