@@ -5,4 +5,6 @@ if (typeof supabase !== 'undefined' && supabase.createClient) {
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = client;
     window.supabaseClient = client;
+} else {
+    console.error("Supabase SDK не завантажено!");
 }
