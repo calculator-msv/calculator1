@@ -220,77 +220,41 @@
         }
     }
 
-    /// Завантаження списку авто користувача з Supabase або LocalStorage
 async function updateCarList() {
     const select = document.getElementById('carSelect');
     if (!select) return;
-    select.innerHTML = '';
+    select.innerHTML = '<option value="">-- Виберіть ТЗ --</option>';
 
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = "";
-    defaultOpt.innerText = "-- Виберіть ТЗ --";
-    defaultOpt.disabled = true;
-    defaultOpt.hidden = true;
-    select.appendChild(defaultOpt);
-
-    let cars = {};
-    const client = getSupabaseClient();
+    let carsList = [];
     const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
 
+    // Спочатку перевіряємо хмару Supabase
     if (client && userData.uid && userData.uid !== 'guest_local') {
         try {
-            // Явний запит авто тільки для ПОВ'ЯЗАНОГО USER_ID
-            const { data, error } = await client
-                .from('cars')
-                .select('*')
-                .eq('user_id', userData.uid);
-
-            if (!error && data && data.length > 0) {
-                data.forEach(c => { 
-                    cars[c.id] = c; 
-                });
-                // КЕШУЄМО АВТО В ЛОКАЛЬНУ ПАМ'ЯТЬ ДЛЯ ЦЬОГО КОРИСТУВАЧА
-                localStorage.setItem('cars', JSON.stringify(cars));
-            } else {
-                // Якщо з Supabase повернувся порожній список, беремо з кешу
-                cars = JSON.parse(localStorage.getItem('cars')) || {};
+            const { data } = await client.from('cars').select('*').eq('user_id', userData.uid);
+            if (data && data.length > 0) {
+                carsList = data;
             }
-        } catch(e) {
-            console.error("Помилка Supabase:", e);
-            cars = JSON.parse(localStorage.getItem('cars')) || {};
-        }
-    } else {
-        cars = JSON.parse(localStorage.getItem('cars')) || {};
+        } catch(e) {}
     }
 
-    const currentSelectedId = localStorage.getItem('selected_car_id');
-    let activeFound = false;
+    // Якщо у хмарі порожньо або це гість — беремо зі страховки
+    if (carsList.length === 0) {
+        carsList = JSON.parse(localStorage.getItem('user_cars_backup') || '[]');
+    }
 
-    for (let id in cars) {
-        const carObj = cars[id];
-        if (carObj && (carObj.name || carObj.brand)) {
+    // Відображаємо у випадаючому списку
+    if (carsList.length > 0) {
+        const carsObj = {};
+        carsList.forEach((car, idx) => {
+            carsObj[car.id || idx] = car;
             const opt = document.createElement('option');
-            const name = carObj.name || carObj.brand;
-            const displayName = (carObj.plate && carObj.plate !== 'Б/Н') 
-                ? `${name} (${carObj.plate})` 
-                : name;
-
-            opt.value = id;
-            opt.innerText = displayName;
-
-            if (String(currentSelectedId) === String(id)) {
-                opt.selected = true;
-                activeFound = true;
-            }
+            opt.value = car.id || idx;
+            opt.innerText = `${car.name} (${car.plate || 'без н/з'})`;
             select.appendChild(opt);
-        }
-    }
-
-    if (!activeFound) {
-        select.value = "";
-        document.getElementById('results').style.display = 'none';
-    } else {
-        calculate();
+        });
+        localStorage.setItem('cars', JSON.stringify(carsObj));
     }
 }
 
