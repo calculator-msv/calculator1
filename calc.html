@@ -223,41 +223,61 @@
 async function updateCarList() {
     const select = document.getElementById('carSelect');
     if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Завантаження авто... --</option>';
+
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
+    let carsList = [];
+
+    if (client) {
+        try {
+            // Запитуємо поточного користувача безпосередньо у Supabase
+            const { data: { user } } = await client.auth.getUser();
+
+            if (user) {
+                // Витягуємо автомобілі тільки для цього user.id з хмари
+                const { data, error } = await client
+                    .from('cars')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                if (!error && data) {
+                    carsList = data;
+                }
+            } else {
+                // Якщо заповнено як Гість
+                carsList = JSON.parse(localStorage.getItem('guest_cars') || '[]');
+            }
+        } catch (e) {
+            console.error("Помилка завантаження авто з базі:", e);
+        }
+    }
+
     select.innerHTML = '<option value="">-- Виберіть ТЗ --</option>';
 
-    let carsList = [];
-    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
-
-    // Спочатку перевіряємо хмару Supabase
-    if (client && userData.uid && userData.uid !== 'guest_local') {
-        try {
-            const { data } = await client.from('cars').select('*').eq('user_id', userData.uid);
-            if (data && data.length > 0) {
-                carsList = data;
-            }
-        } catch(e) {}
-    }
-
-    // Якщо у хмарі порожньо або це гість — беремо зі страховки
-    if (carsList.length === 0) {
-        carsList = JSON.parse(localStorage.getItem('user_cars_backup') || '[]');
-    }
-
-    // Відображаємо у випадаючому списку
     if (carsList.length > 0) {
         const carsObj = {};
-        carsList.forEach((car, idx) => {
-            carsObj[car.id || idx] = car;
+        carsList.forEach((car) => {
+            carsObj[car.id] = car;
             const opt = document.createElement('option');
-            opt.value = car.id || idx;
+            opt.value = car.id;
             opt.innerText = `${car.name} (${car.plate || 'без н/з'})`;
             select.appendChild(opt);
         });
+
+        // Зберігаємо поточний список авто для швидкого розрахунку у калькуляторі
         localStorage.setItem('cars', JSON.stringify(carsObj));
+        
+        // Відновлюємо вибране авто, якщо воно було обране раніше
+        const lastSelected = localStorage.getItem('selected_car_id');
+        if (lastSelected && carsObj[lastSelected]) {
+            select.value = lastSelected;
+            loadCar();
+        }
+    } else {
+        select.innerHTML = '<option value="">-- Немає доданих авто --</option>';
     }
 }
-
     function loadCar() {
         const selectedKey = document.getElementById('carSelect').value;
         const cars = JSON.parse(localStorage.getItem('cars')) || {};
