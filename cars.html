@@ -267,39 +267,46 @@
     }
 
  async function addCar() {
-    const name = document.getElementById('n_name').value.trim();
-    const plate = document.getElementById('n_plate').value.trim() || 'Б/Н';
-    const hsm = parseFloat(document.getElementById('n_hsm').value) || 0;
-    const hw = parseFloat(document.getElementById('n_hw').value) || 1.3;
-    const om = parseFloat(document.getElementById('n_om').value) || 0;
-    const ot = parseFloat(document.getElementById('n_ot').value) || 0;
-    const os = parseFloat(document.getElementById('n_os').value) || 0;
-    const op = parseFloat(document.getElementById('n_op').value) || 0;
+    // Допоміжна функція для безпечного парсингу чисел із комами
+    const parseNum = (id, defaultVal = 0) => {
+        const val = document.getElementById(id)?.value || '';
+        return parseFloat(val.replace(',', '.')) || defaultVal;
+    };
 
+    const name = document.getElementById('n_name')?.value.trim() || document.querySelector('input[placeholder*="МАРКА"]')?.value.trim();
+    const plate = document.getElementById('n_plate')?.value.trim() || 'Б/Н';
+    
     if (!name) {
-        alert("Введіть назву ТЗ!");
+        alert("Введіть марку та модель ТЗ!");
         return;
     }
 
-    // Зчитуємо поточного користувача з локального збереження
-    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    console.log("Поточний користувач:", userData);
+    // Зчитуємо параметри та перетворюємо коми на крапки
+    const hsm = parseNum('n_hsm', 0);
+    const hw = parseNum('n_hw', 1.3);
+    const om = parseNum('n_om', 0);
+    const ot = parseNum('n_ot', 0);
+    const os = parseNum('n_os', 0);
+    const op = parseNum('n_op', 0);
 
-    if (!userData.uid || userData.uid === 'guest_local') {
-        alert("УВАГА: Ви увійшли як ГІСТЬ або акаунт не розпізнано! Дані в хмару не підуть.");
-    }
-
-    // Перевіряємо наявність Supabase
     const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
 
     if (!client) {
-        alert("КРИТИЧНА ПОМИЛКА: Скрипт Supabase не ініціалізовано! Перевірте supabase-config.js");
+        alert("Помилка підключення Supabase SDK!");
         return;
     }
 
-    // Пробуємо відправити в Supabase
+    // Отримуємо поточного залогіненого користувача з сесії Supabase
+    const { data: { user } } = await client.auth.getUser();
+
+    if (!user) {
+        alert("Ви не авторизовані! Будь ласка, увійдіть через сторінку входу.");
+        return;
+    }
+
+    // Відправка чистих даних у Supabase
     const { data, error } = await client.from('cars').insert([{
-        user_id: userData.uid || 'guest_local',
+        user_id: user.id,
         name: name,
         plate: plate,
         hsm: hsm,
@@ -311,12 +318,12 @@
     }]).select();
 
     if (error) {
-        alert("ПОМИЛКА SUPABASE: " + error.message + "\nДеталі: " + error.details);
-        console.error("Помилка детально:", error);
+        console.error("Деталі помилки:", error);
+        alert("Помилка збереження: " + error.message);
         return;
     }
 
-    alert("УСПІХ! Авто збережено в хмарну базу Supabase ID: " + (data[0]?.id || 'ОК'));
+    alert("Автомобіль успішно збережено в акаунт!");
     window.location.href = 'calc.html';
 }
     async function deleteCar(id) {
