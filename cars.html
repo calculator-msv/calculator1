@@ -268,23 +268,55 @@
 
  async function addCar() {
     const name = document.getElementById('n_name').value.trim();
+    const plate = document.getElementById('n_plate').value.trim() || 'Б/Н';
+    const hsm = parseFloat(document.getElementById('n_hsm').value) || 0;
+    const hw = parseFloat(document.getElementById('n_hw').value) || 1.3;
+    const om = parseFloat(document.getElementById('n_om').value) || 0;
+    const ot = parseFloat(document.getElementById('n_ot').value) || 0;
+    const os = parseFloat(document.getElementById('n_os').value) || 0;
+    const op = parseFloat(document.getElementById('n_op').value) || 0;
+
     if (!name) {
-        alert("Введіть марку та модель ТЗ!");
+        alert("Введіть назву ТЗ!");
         return;
     }
 
-    await AppDB.saveCar({
-        name: name,
-        plate: document.getElementById('n_plate').value.trim() || 'Б/Н',
-        hsm: parseFloat(document.getElementById('n_hsm').value) || 0,
-        hw: parseFloat(document.getElementById('n_hw').value) || 1.3,
-        om: parseFloat(document.getElementById('n_om').value) || 0,
-        ot: parseFloat(document.getElementById('n_ot').value) || 0,
-        os: parseFloat(document.getElementById('n_os').value) || 0,
-        op: parseFloat(document.getElementById('n_op').value) || 0
-    });
+    // Зчитуємо поточного користувача з локального збереження
+    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    console.log("Поточний користувач:", userData);
 
-    alert("Автомобіль збережено!");
+    if (!userData.uid || userData.uid === 'guest_local') {
+        alert("УВАГА: Ви увійшли як ГІСТЬ або акаунт не розпізнано! Дані в хмару не підуть.");
+    }
+
+    // Перевіряємо наявність Supabase
+    const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
+
+    if (!client) {
+        alert("КРИТИЧНА ПОМИЛКА: Скрипт Supabase не ініціалізовано! Перевірте supabase-config.js");
+        return;
+    }
+
+    // Пробуємо відправити в Supabase
+    const { data, error } = await client.from('cars').insert([{
+        user_id: userData.uid || 'guest_local',
+        name: name,
+        plate: plate,
+        hsm: hsm,
+        hw: hw,
+        om: om,
+        ot: ot,
+        os: os,
+        op: op
+    }]).select();
+
+    if (error) {
+        alert("ПОМИЛКА SUPABASE: " + error.message + "\nДеталі: " + error.details);
+        console.error("Помилка детально:", error);
+        return;
+    }
+
+    alert("УСПІХ! Авто збережено в хмарну базу Supabase ID: " + (data[0]?.id || 'ОК'));
     window.location.href = 'calc.html';
 }
     async function deleteCar(id) {
