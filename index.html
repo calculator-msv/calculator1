@@ -147,57 +147,62 @@ async function handleRegister() {
     }
 }
 
-    // ВХІД
-    async function handleLogin() {
-        const client = getSupabaseClient();
-        if (!client) {
-            alert("Помилка: Файл supabase-config.js не знайдено або ключ не вказано!");
-            return;
-        }
-
-        const email = document.getElementById('login-email').value.trim();
-        const password = document.getElementById('login-password').value.trim();
-
-        if (!email || !password) {
-            alert("Введіть Email та пароль!");
-            return;
-        }
-
-        try {
-            const { data, error } = await client.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
-            if (error) {
-                alert("Помилка входу: " + error.message);
-            } else {
-                localStorage.clear();
-
-                const { data: profile } = await client
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', data.user.id)
-                    .single();
-
-                const username = profile ? profile.full_name : email;
-                const role = profile ? profile.role : 'user';
-
-                localStorage.setItem('currentUser', JSON.stringify({
-                    uid: data.user.id,
-                    username: username,
-                    email: email,
-                    role: role
-                }));
-
-                alert(`Успішний вхід! Вітаємо, ${username}`);
-                window.location.href = (role === 'admin' || role === 'programmer') ? 'admin.html' : 'home.html';
-            }
-        } catch (err) {
-            alert("Помилка виконання: " + err.message);
-        }
+   // Функція ВХОДУ в акаунт
+async function loginUser(email, password) {
+    const client = window.supabaseClient || (typeof supabase !== 'undefined' ? supabase : null);
+    
+    if (!client) {
+        alert("Помилка: Не вдалося підключитися до сервера Supabase!");
+        return;
     }
 
+    // 1. Авторизація через Supabase Auth
+    const { data, error } = await client.auth.signInWithPassword({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        alert("Помилка входу: " + error.message);
+        return;
+    }
+
+    // 2. Збереження сесії користувача для відображення у шапці
+    const user = data.user;
+    localStorage.setItem('currentUser', JSON.stringify({
+        uid: user.id,
+        email: user.email,
+        username: user.user_metadata?.full_name || user.email.split('@')[0]
+    }));
+
+    alert("Успішний вхід!");
+    window.location.href = 'home.html';
+}
+
+// Функція РЕЄСТРАЦІЇ нового акаунта
+async function registerUser(email, password, fullName) {
+    const client = window.supabaseClient || (typeof supabase !== 'undefined' ? supabase : null);
+    
+    if (!client) {
+        alert("Помилка підключення до бази!");
+        return;
+    }
+
+    const { data, error } = await client.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+            data: { full_name: fullName }
+        }
+    });
+
+    if (error) {
+        alert("Помилка реєстрації: " + error.message);
+        return;
+    }
+
+    alert("Акаунт успішно створено! Тепер увійдіть у систему.");
+}
     // ВХІД ЯК ГІСТЬ (ПРАЦЮЄ НАВІТЬ БЕЗ ПОДАТКОВИХ СКРИПТІВ)
     async function loginAsGuest() {
         const client = getSupabaseClient();
