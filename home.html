@@ -182,16 +182,24 @@
         }
 
         // Функція виходу
-        async function logout() {
+       async function logout() {
+    // 1. Пошук та завершення сесії в Supabase
     const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
-    if (client) {
-        await client.auth.signOut(); // Вихід з сесії Supabase
+    if (client && client.auth) {
+        try { 
+            await client.auth.signOut(); 
+        } catch (e) {
+            console.error("Помилка виходу з Supabase:", e);
+        }
     }
-    // Очищаємо лише сесійні змінні, а не всю пам'ять
+
+    // 2. Очищення ЛИШЕ сесійних змінних (НЕ ЧІПАЄМО 'user_cars_backup' чи 'cars')
     localStorage.removeItem('currentUser');
     localStorage.removeItem('selectedCar');
     localStorage.removeItem('selected_car_id');
-    
+    localStorage.removeItem('selected_car_name');
+
+    // 3. Перенаправлення на сторінку входу
     window.location.href = 'index.html';
 }
     </script>
