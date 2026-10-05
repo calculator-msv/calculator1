@@ -220,71 +220,79 @@
         }
     }
 
-    // Завантаження списку авто користувача з Supabase або LocalStorage
-    async function updateCarList() {
-        const select = document.getElementById('carSelect');
-        if (!select) return;
-        select.innerHTML = '';
+    /// Завантаження списку авто користувача з Supabase або LocalStorage
+async function updateCarList() {
+    const select = document.getElementById('carSelect');
+    if (!select) return;
+    select.innerHTML = '';
 
-        const defaultOpt = document.createElement('option');
-        defaultOpt.value = "";
-        defaultOpt.innerText = "-- Виберіть ТЗ --";
-        defaultOpt.disabled = true;
-        defaultOpt.hidden = true;
-        select.appendChild(defaultOpt);
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = "";
+    defaultOpt.innerText = "-- Виберіть ТЗ --";
+    defaultOpt.disabled = true;
+    defaultOpt.hidden = true;
+    select.appendChild(defaultOpt);
 
-        let cars = {};
-        const client = getSupabaseClient();
+    let cars = {};
+    const client = getSupabaseClient();
+    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
 
-        if (client) {
-            try {
-                const { data: { user } } = await client.auth.getUser();
-                if (user) {
-                    const { data, error } = await client.from('cars').select('*');
-                    if (!error && data) {
-                        data.forEach(c => { cars[c.id] = c; });
-                        localStorage.setItem('cars', JSON.stringify(cars));
-                    }
-                } else {
-                    cars = JSON.parse(localStorage.getItem('cars')) || {};
-                }
-            } catch(e) {
+    if (client && userData.uid && userData.uid !== 'guest_local') {
+        try {
+            // Явний запит авто тільки для ПОВ'ЯЗАНОГО USER_ID
+            const { data, error } = await client
+                .from('cars')
+                .select('*')
+                .eq('user_id', userData.uid);
+
+            if (!error && data && data.length > 0) {
+                data.forEach(c => { 
+                    cars[c.id] = c; 
+                });
+                // КЕШУЄМО АВТО В ЛОКАЛЬНУ ПАМ'ЯТЬ ДЛЯ ЦЬОГО КОРИСТУВАЧА
+                localStorage.setItem('cars', JSON.stringify(cars));
+            } else {
+                // Якщо з Supabase повернувся порожній список, беремо з кешу
                 cars = JSON.parse(localStorage.getItem('cars')) || {};
             }
-        } else {
+        } catch(e) {
+            console.error("Помилка Supabase:", e);
             cars = JSON.parse(localStorage.getItem('cars')) || {};
         }
+    } else {
+        cars = JSON.parse(localStorage.getItem('cars')) || {};
+    }
 
-        const currentSelectedId = localStorage.getItem('selected_car_id');
-        let activeFound = false;
+    const currentSelectedId = localStorage.getItem('selected_car_id');
+    let activeFound = false;
 
-        for (let id in cars) {
-            const carObj = cars[id];
-            if (carObj && (carObj.name || carObj.brand)) {
-                const opt = document.createElement('option');
-                const name = carObj.name || carObj.brand;
-                const displayName = (carObj.plate && carObj.plate !== 'Б/Н') 
-                    ? `${name} (${carObj.plate})` 
-                    : name;
+    for (let id in cars) {
+        const carObj = cars[id];
+        if (carObj && (carObj.name || carObj.brand)) {
+            const opt = document.createElement('option');
+            const name = carObj.name || carObj.brand;
+            const displayName = (carObj.plate && carObj.plate !== 'Б/Н') 
+                ? `${name} (${carObj.plate})` 
+                : name;
 
-                opt.value = id;
-                opt.innerText = displayName;
+            opt.value = id;
+            opt.innerText = displayName;
 
-                if (String(currentSelectedId) === String(id)) {
-                    opt.selected = true;
-                    activeFound = true;
-                }
-                select.appendChild(opt);
+            if (String(currentSelectedId) === String(id)) {
+                opt.selected = true;
+                activeFound = true;
             }
-        }
-
-        if (!activeFound) {
-            select.value = "";
-            document.getElementById('results').style.display = 'none';
-        } else {
-            calculate();
+            select.appendChild(opt);
         }
     }
+
+    if (!activeFound) {
+        select.value = "";
+        document.getElementById('results').style.display = 'none';
+    } else {
+        calculate();
+    }
+}
 
     function loadCar() {
         const selectedKey = document.getElementById('carSelect').value;
