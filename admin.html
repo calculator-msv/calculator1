@@ -37,10 +37,26 @@
             document.getElementById('storageData').innerText = JSON.stringify(localStorage, null, 2);
         }
 
-        function logout() {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
+        async function logout() {
+    // 1. Пошук та завершення сесії в Supabase
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
+    if (client && client.auth) {
+        try { 
+            await client.auth.signOut(); 
+        } catch (e) {
+            console.error("Помилка виходу з Supabase:", e);
         }
+    }
+
+    // 2. Очищення ЛИШЕ сесійних змінних (НЕ ЧІПАЄМО 'user_cars_backup' чи 'cars')
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('selectedCar');
+    localStorage.removeItem('selected_car_id');
+    localStorage.removeItem('selected_car_name');
+
+    // 3. Перенаправлення на сторінку входу
+    window.location.href = 'index.html';
+}
     </script>
 </body>
 </html>
