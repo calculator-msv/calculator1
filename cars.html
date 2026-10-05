@@ -283,21 +283,21 @@
         return;
     }
 
-    // Отримуємо клієнт Supabase
-    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
+    // 1. Отримуємо офіційний клієнт Supabase
+    const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
     
     if (!client) {
-        alert("Помилка: Supabase SDK не підключено!");
+        alert("Помилка: Supabase не підключено у cars.html!");
         return;
     }
 
-    // Перевіряємо сесію Supabase
+    // 2. ДІСТАЄМО СПРАВЖНІЙ USER_ID З АКТИВНОЇ СЕСІЇ SUPABASE
     const { data: { user } } = await client.auth.getUser();
 
-    if (user) {
-        // Зберігаємо ПРЯМО В ХМАРНУ БАЗУ ПІД USER.ID
-        const { error } = await client.from('cars').insert([{
-            user_id: user.id,
+    if (user && user.id) {
+        // ЗБЕРІГАЄМО В БАЗУ ДАНИХ З ЯВНОЮ ПРИВ'ЯЗКОЮ ДО USER.ID
+        const { data, error } = await client.from('cars').insert([{
+            user_id: user.id, // <--- ОСЬ ТУТ ВОНО ПРИВ'ЯЗУЄЦЬСЯ ДО АКАУНТА
             name: name,
             plate: plate,
             hsm: hsm,
@@ -306,19 +306,17 @@
             ot: ot,
             os: os,
             op: op
-        }]);
+        }]).select();
 
         if (error) {
-            alert("Помилка збереження в Хмару: " + error.message);
+            alert("Помилка збереження в базу: " + error.message);
             return;
         }
-        alert("Автомобіль успішно збережено в акаунт!");
+
+        alert("ТЗ успішно прив'язано та збережено в хмарний акаунт!");
     } else {
-        // Для гостей
-        let localCars = JSON.parse(localStorage.getItem('guest_cars') || '[]');
-        localCars.push({ id: 'guest_' + Date.now(), name, plate, hsm, hw, om, ot, os, op });
-        localStorage.setItem('guest_cars', JSON.stringify(localCars));
-        alert("Авто збережено в режимі Гість!");
+        alert("Ви не авторизовані у базі Supabase! Перезапустіть сторінку входу.");
+        return;
     }
 
     window.location.href = 'calc.html';
