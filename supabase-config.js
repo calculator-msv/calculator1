@@ -1,10 +1,12 @@
-const SUPABASE_URL = 'https://rtkwhwutvetrnmjvoumx.supabase.co';
+// Конфігурація Supabase із ТОЧНИМ Project ID з вашого скріншоту
+const SUPABASE_URL = 'https://rtkwhwutvetrnmjvoumx.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0a3dod3V0dmV0cm5tanZvdW14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNDE2NDgsImV4cCI6MjEwNjcxNzY0OH0.0P_uDdy5965e6nRCj47l4ExBroaoOhQhNbR-kvM2Bdk';
 
+// Ініціалізація глобального клієнта Supabase
 if (typeof supabase !== 'undefined' && supabase.createClient) {
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = client;
-    window.supabaseClient = client;
+    window.supabaseClient = client; // Забезпечує роботу всіх файлів
 } else {
-    console.error("Supabase SDK не завантажено!");
+    console.error("Помилка: Supabase SDK не підключено!");
 }
