@@ -217,60 +217,45 @@
 async function updateCarList() {
     const select = document.getElementById('carSelect');
     if (!select) return;
-    
-    select.innerHTML = '<option value="">-- Завантаження авто... --</option>';
+    select.innerHTML = '<option value="">-- Завантаження з акаунта... --</option>';
 
-    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
-    let carsList = [];
+    const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
 
     if (client) {
         try {
-            // Запитуємо поточного користувача безпосередньо у Supabase
+            // 1. Отримуємо залогіненого користувача з хмари
             const { data: { user } } = await client.auth.getUser();
 
-            if (user) {
-                // Витягуємо автомобілі тільки для цього user.id з хмари
+            if (user && user.id) {
+                // 2. Витягуємо авто ТІЛЬКИ для цього user_id
                 const { data, error } = await client
                     .from('cars')
                     .select('*')
                     .eq('user_id', user.id);
 
-                if (!error && data) {
-                    carsList = data;
+                if (!error && data && data.length > 0) {
+                    select.innerHTML = '<option value="">-- Виберіть ТЗ --</option>';
+                    const carsObj = {};
+                    
+                    data.forEach(car => {
+                        carsObj[car.id] = car;
+                        const opt = document.createElement('option');
+                        opt.value = car.id;
+                        opt.innerText = `${car.name} (${car.plate || 'без н/з'})`;
+                        select.appendChild(opt);
+                    });
+
+                    // Кешуємо тільки для поточного розрахунку
+                    localStorage.setItem('cars', JSON.stringify(carsObj));
+                    return;
                 }
-            } else {
-                // Якщо заповнено як Гість
-                carsList = JSON.parse(localStorage.getItem('guest_cars') || '[]');
             }
         } catch (e) {
-            console.error("Помилка завантаження авто з базі:", e);
+            console.error("Помилка зчитування авто з акаунта:", e);
         }
     }
 
-    select.innerHTML = '<option value="">-- Виберіть ТЗ --</option>';
-
-    if (carsList.length > 0) {
-        const carsObj = {};
-        carsList.forEach((car) => {
-            carsObj[car.id] = car;
-            const opt = document.createElement('option');
-            opt.value = car.id;
-            opt.innerText = `${car.name} (${car.plate || 'без н/з'})`;
-            select.appendChild(opt);
-        });
-
-        // Зберігаємо поточний список авто для швидкого розрахунку у калькуляторі
-        localStorage.setItem('cars', JSON.stringify(carsObj));
-        
-        // Відновлюємо вибране авто, якщо воно було обране раніше
-        const lastSelected = localStorage.getItem('selected_car_id');
-        if (lastSelected && carsObj[lastSelected]) {
-            select.value = lastSelected;
-            loadCar();
-        }
-    } else {
-        select.innerHTML = '<option value="">-- Немає доданих авто --</option>';
-    }
+    select.innerHTML = '<option value="">-- Немає доданих авто в акаунті --</option>';
 }
     function loadCar() {
         const selectedKey = document.getElementById('carSelect').value;
