@@ -268,55 +268,23 @@
 
  async function addCar() {
     const name = document.getElementById('n_name').value.trim();
-    const plate = document.getElementById('n_plate').value.trim() || 'Б/Н';
-    const hsm = parseFloat(document.getElementById('n_hsm').value) || 0;
-    const hw = parseFloat(document.getElementById('n_hw').value) || 1.3;
-    const om = parseFloat(document.getElementById('n_om').value) || 0;
-    const ot = parseFloat(document.getElementById('n_ot').value) || 0;
-    const os = parseFloat(document.getElementById('n_os').value) || 0;
-    const op = parseFloat(document.getElementById('n_op').value) || 0;
-
     if (!name) {
-        alert("Введіть назву ТЗ!");
+        alert("Введіть марку та модель ТЗ!");
         return;
     }
 
-    // 1. Отримуємо офіційний клієнт Supabase
-    const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
-    
-    if (!client) {
-        alert("Помилка: Supabase не підключено у cars.html!");
-        return;
-    }
+    await AppDB.saveCar({
+        name: name,
+        plate: document.getElementById('n_plate').value.trim() || 'Б/Н',
+        hsm: parseFloat(document.getElementById('n_hsm').value) || 0,
+        hw: parseFloat(document.getElementById('n_hw').value) || 1.3,
+        om: parseFloat(document.getElementById('n_om').value) || 0,
+        ot: parseFloat(document.getElementById('n_ot').value) || 0,
+        os: parseFloat(document.getElementById('n_os').value) || 0,
+        op: parseFloat(document.getElementById('n_op').value) || 0
+    });
 
-    // 2. ДІСТАЄМО СПРАВЖНІЙ USER_ID З АКТИВНОЇ СЕСІЇ SUPABASE
-    const { data: { user } } = await client.auth.getUser();
-
-    if (user && user.id) {
-        // ЗБЕРІГАЄМО В БАЗУ ДАНИХ З ЯВНОЮ ПРИВ'ЯЗКОЮ ДО USER.ID
-        const { data, error } = await client.from('cars').insert([{
-            user_id: user.id, // <--- ОСЬ ТУТ ВОНО ПРИВ'ЯЗУЄЦЬСЯ ДО АКАУНТА
-            name: name,
-            plate: plate,
-            hsm: hsm,
-            hw: hw,
-            om: om,
-            ot: ot,
-            os: os,
-            op: op
-        }]).select();
-
-        if (error) {
-            alert("Помилка збереження в базу: " + error.message);
-            return;
-        }
-
-        alert("ТЗ успішно прив'язано та збережено в хмарний акаунт!");
-    } else {
-        alert("Ви не авторизовані у базі Supabase! Перезапустіть сторінку входу.");
-        return;
-    }
-
+    alert("Автомобіль збережено!");
     window.location.href = 'calc.html';
 }
     async function deleteCar(id) {
