@@ -266,66 +266,15 @@
         el.style.display = isVisible ? 'none' : 'block';
     }
 
- async function addCar() {
-    // Допоміжна функція для безпечного парсингу чисел із комами
-    const parseNum = (id, defaultVal = 0) => {
-        const val = document.getElementById(id)?.value || '';
-        return parseFloat(val.replace(',', '.')) || defaultVal;
-    };
+ -- Додаємо відсутні колонки норм олив у таблицю cars
+ALTER TABLE public.cars ADD COLUMN IF NOT EXISTS om NUMERIC DEFAULT 0;
+ALTER TABLE public.cars ADD COLUMN IF NOT EXISTS ot NUMERIC DEFAULT 0;
+ALTER TABLE public.cars ADD COLUMN IF NOT EXISTS os NUMERIC DEFAULT 0;
+ALTER TABLE public.cars ADD COLUMN IF NOT EXISTS op NUMERIC DEFAULT 0;
+ALTER TABLE public.cars ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Вантажні';
 
-    const name = document.getElementById('n_name')?.value.trim() || document.querySelector('input[placeholder*="МАРКА"]')?.value.trim();
-    const plate = document.getElementById('n_plate')?.value.trim() || 'Б/Н';
-    
-    if (!name) {
-        alert("Введіть марку та модель ТЗ!");
-        return;
-    }
-
-    // Зчитуємо параметри та перетворюємо коми на крапки
-    const hsm = parseNum('n_hsm', 0);
-    const hw = parseNum('n_hw', 1.3);
-    const om = parseNum('n_om', 0);
-    const ot = parseNum('n_ot', 0);
-    const os = parseNum('n_os', 0);
-    const op = parseNum('n_op', 0);
-
-    const client = typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : (typeof window.supabase !== 'undefined' ? window.supabase : null);
-
-    if (!client) {
-        alert("Помилка підключення Supabase SDK!");
-        return;
-    }
-
-    // Отримуємо поточного залогіненого користувача з сесії Supabase
-    const { data: { user } } = await client.auth.getUser();
-
-    if (!user) {
-        alert("Ви не авторизовані! Будь ласка, увійдіть через сторінку входу.");
-        return;
-    }
-
-    // Відправка чистих даних у Supabase
-    const { data, error } = await client.from('cars').insert([{
-        user_id: user.id,
-        name: name,
-        plate: plate,
-        hsm: hsm,
-        hw: hw,
-        om: om,
-        ot: ot,
-        os: os,
-        op: op
-    }]).select();
-
-    if (error) {
-        console.error("Деталі помилки:", error);
-        alert("Помилка збереження: " + error.message);
-        return;
-    }
-
-    alert("Автомобіль успішно збережено в акаунт!");
-    window.location.href = 'calc.html';
-}
+-- Перезавантажуємо кєш схеми даних
+NOTIFY pgrst, 'reload schema';
     async function deleteCar(id) {
         if (confirm("Видалити цей автомобіль з бази?")) {
             const { data: { user } } = await supabase.auth.getUser();
