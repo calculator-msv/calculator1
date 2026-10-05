@@ -268,50 +268,59 @@
         el.style.display = isVisible ? 'none' : 'block';
     }
 
-    async function addCar() {
-        const name = document.getElementById('n_name').value.trim();
-        const plate = document.getElementById('n_plate').value.trim();
-        
-        if (!name) {
-            alert("Помилка: Введіть марку/модель автомобіля!");
-            return;
-        }
+   async function addCar() {
+    const name = document.getElementById('n_name').value.trim();
+    const plate = document.getElementById('n_plate').value.trim();
+    const hsm = parseFloat(document.getElementById('n_hsm').value) || 0;
+    const hw = parseFloat(document.getElementById('n_hw').value) || 1.3;
+    const om = parseFloat(document.getElementById('n_om').value) || 0;
+    const ot = parseFloat(document.getElementById('n_ot').value) || 0;
+    const os = parseFloat(document.getElementById('n_os').value) || 0;
+    const op = parseFloat(document.getElementById('n_op').value) || 0;
 
-        const { data: { user } } = await supabase.auth.getUser();
+    if (!name) {
+        alert("Введіть марку та модель ТЗ!");
+        return;
+    }
 
-        const carObj = {
-            name: name,
-            plate: plate || "Б/Н",
-            category: document.getElementById('n_category').value,
-            hsm: parseFloat(document.getElementById('n_hsm').value) || 0,
-            hw: parseFloat(document.getElementById('n_hw').value) || 0,
-            om: parseFloat(document.getElementById('n_om').value) || 0,
-            ot: parseFloat(document.getElementById('n_ot').value) || 0,
-            os: parseFloat(document.getElementById('n_os').value) || 0,
-            op: parseFloat(document.getElementById('n_op').value) || 0
-        };
+    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
 
-        if (user) {
-            // Збереження в Supabase
-            carObj.user_id = user.id;
-            const { error } = await supabase.from('cars').insert([carObj]);
+    // Додавання у хмарну БД PostgreSQL (Supabase)
+    if (client && userData.uid && userData.uid !== 'guest_local') {
+        try {
+            const { data, error } = await client.from('cars').insert([{
+                user_id: userData.uid,
+                name: name,
+                plate: plate || 'Б/Н',
+                hsm: hsm,
+                hw: hw,
+                om: om,
+                ot: ot,
+                os: os,
+                op: op
+            }]);
+
             if (error) {
-                alert("Помилка збереження в хмару: " + error.message);
+                alert("Помилка збереження в базу: " + error.message);
                 return;
             }
-        } else {
-            // Збереження локально для гостя
-            let db = JSON.parse(localStorage.getItem('cars')) || {};
-            const id = name + (plate ? "_" + plate : "");
-            db[id] = carObj;
-            localStorage.setItem('cars', JSON.stringify(db));
+            alert("Автомобіль успішно збережено в хмарну базу!");
+        } catch(err) {
+            alert("Помилка: " + err.message);
+            return;
         }
-
-        document.getElementById('n_name').value = "";
-        document.getElementById('n_plate').value = "";
-        await render();
-        alert("Автомобіль успішно додано!");
+    } else {
+        // Якщо це гість
+        let cars = JSON.parse(localStorage.getItem('cars') || '{}');
+        const id = 'car_' + Date.now();
+        cars[id] = { name, plate, hsm, hw, om, ot, os, op };
+        localStorage.setItem('cars', JSON.stringify(cars));
+        alert("Автомобіль збережено локально (режим Гостя)!");
     }
+
+    window.location.href = 'calc.html';
+}
 
     async function deleteCar(id) {
         if (confirm("Видалити цей автомобіль з бази?")) {
