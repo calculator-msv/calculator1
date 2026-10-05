@@ -19,9 +19,9 @@
         .guest-btn:hover { background: #1f6694; }
     </style>
 
-    <!-- 1. Завантаження бібліотеки Supabase JS SDK -->
+    <!-- 1. Бібліотека Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- 2. Підключення вашого файлу конфігурації -->
+    <!-- 2. Конфігурація -->
     <script src="supabase-config.js"></script>
 </head>
 <body>
@@ -54,7 +54,6 @@
 </div>
 
 <script>
-    // Перемикач вкладок
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.form-group').forEach(form => form.classList.remove('active'));
@@ -68,7 +67,6 @@
         }
     }
 
-    // Універсальне отримання клієнта Supabase
     function getSupabaseClient() {
         if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient.auth) return window.supabaseClient;
         if (typeof window.supabase !== 'undefined' && window.supabase.auth) return window.supabase;
@@ -76,7 +74,7 @@
         return null;
     }
 
-    // ОБРОБНИК ВХОДУ
+    // ГОЛОВНИЙ ОБРОБНИК ВХОДУ
     async function handleLogin() {
         const client = getSupabaseClient();
         if (!client) {
@@ -118,11 +116,11 @@
         }
     }
 
-    // ОБРОБНИК РЕЄСТРАЦІЇ
+    // ГОЛОВНИЙ ОБРОБНИК РЕЄСТРАЦІЇ
     async function handleRegister() {
         const client = getSupabaseClient();
         if (!client) {
-            alert("Помилка: Файл supabase-config.js не підключено або в ньому помилка!");
+            alert("Помилка підключення до Supabase!");
             return;
         }
 
@@ -155,17 +153,6 @@
             }
 
             if (data.user) {
-                try {
-                    await client.from('profiles').upsert([{
-                        id: data.user.id,
-                        full_name: fullName,
-                        email: email,
-                        role: 'user'
-                    }]);
-                } catch(e) {
-                    console.log("Запис профілю пропущено");
-                }
-
                 localStorage.setItem('currentUser', JSON.stringify({
                     uid: data.user.id,
                     username: fullName,
@@ -181,7 +168,6 @@
         }
     }
 
-    // ВХІД ЯК ГІСТЬ
     async function loginAsGuest() {
         const client = getSupabaseClient();
         if (client) {
