@@ -182,10 +182,18 @@
         }
 
         // Функція виходу
-        function logout() {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'index.html';
-        }
+        async function logout() {
+    const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
+    if (client) {
+        await client.auth.signOut(); // Вихід з сесії Supabase
+    }
+    // Очищаємо лише сесійні змінні, а не всю пам'ять
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('selectedCar');
+    localStorage.removeItem('selected_car_id');
+    
+    window.location.href = 'index.html';
+}
     </script>
 
 </body>
