@@ -268,7 +268,7 @@
         el.style.display = isVisible ? 'none' : 'block';
     }
 
-  async function addCar() {
+ async function addCar() {
     const name = document.getElementById('n_name').value.trim();
     const plate = document.getElementById('n_plate').value.trim() || 'Б/Н';
     const hsm = parseFloat(document.getElementById('n_hsm').value) || 0;
@@ -283,51 +283,46 @@
         return;
     }
 
-    const userData = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const userId = userData.uid || 'guest_local';
-
-    const carObject = {
-        id: 'car_' + Date.now(),
-        user_id: userId,
-        name: name,
-        plate: plate,
-        hsm: hsm,
-        hw: hw,
-        om: om,
-        ot: ot,
-        os: os,
-        op: op
-    };
-
-    // 1. Завжди зберігаємо у локальну пам'ять (НЕ ЗНИКНЕ!)
-    let localCars = JSON.parse(localStorage.getItem('user_cars_backup') || '[]');
-    localCars.push(carObject);
-    localStorage.setItem('user_cars_backup', JSON.stringify(localCars));
-
-    // 2. Відправляємо в Supabase
+    // Отримуємо клієнт Supabase
     const client = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabase !== 'undefined' ? supabase : null);
-    if (client && userId !== 'guest_local') {
-        try {
-            await client.from('cars').insert([{
-                user_id: userId,
-                name: name,
-                plate: plate,
-                hsm: hsm,
-                hw: hw,
-                om: om,
-                ot: ot,
-                os: os,
-                op: op
-            }]);
-        } catch(e) {
-            console.error("Помилка Supabase:", e);
-        }
+    
+    if (!client) {
+        alert("Помилка: Supabase SDK не підключено!");
+        return;
     }
 
-    alert("Автомобіль збережено!");
+    // Перевіряємо сесію Supabase
+    const { data: { user } } = await client.auth.getUser();
+
+    if (user) {
+        // Зберігаємо ПРЯМО В ХМАРНУ БАЗУ ПІД USER.ID
+        const { error } = await client.from('cars').insert([{
+            user_id: user.id,
+            name: name,
+            plate: plate,
+            hsm: hsm,
+            hw: hw,
+            om: om,
+            ot: ot,
+            os: os,
+            op: op
+        }]);
+
+        if (error) {
+            alert("Помилка збереження в Хмару: " + error.message);
+            return;
+        }
+        alert("Автомобіль успішно збережено в акаунт!");
+    } else {
+        // Для гостей
+        let localCars = JSON.parse(localStorage.getItem('guest_cars') || '[]');
+        localCars.push({ id: 'guest_' + Date.now(), name, plate, hsm, hw, om, ot, os, op });
+        localStorage.setItem('guest_cars', JSON.stringify(localCars));
+        alert("Авто збережено в режимі Гість!");
+    }
+
     window.location.href = 'calc.html';
 }
-
     async function deleteCar(id) {
         if (confirm("Видалити цей автомобіль з бази?")) {
             const { data: { user } } = await supabase.auth.getUser();
